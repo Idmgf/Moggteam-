@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" fill="none">
+  <g stroke="#fff" stroke-width="2">
+    <path d="M80 4 96 20 80 36 64 20 80 4Zm0 120 16 16-16 16-16-16 16-16ZM4 80l16-16 16 16-16 16L4 80Zm120 0 16-16 16 16-16 16-16-16Z"/>
+    <path d="M36 36h24v24H36zM100 36h24v24h-24zM36 100h24v24H36zM100 100h24v24h-24z"/>
+    <path d="m60 60 20-12 20 12v40l-20 12-20-12V60Zm0 0 20 12 20-12M80 72v40"/>
+    <path d="M20 20h16v16H20zM124 20h16v16h-16zM20 124h16v16H20zM124 124h16v16h-16z"/>
+  </g>
+</svg>

@@ -1,0 +1,256 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  PARTICIPANT
+  ADMIN
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum PromoCodeStatus {
+  ACTIVE
+  INACTIVE
+  REDEEMED
+}
+
+enum RewardType {
+  GUARANTEED
+  DRAW_ENTRY
+  OTHER
+}
+
+enum RewardClaimStatus {
+  PENDING
+  APPROVED
+  FULFILLED
+  REJECTED
+}
+
+enum OtpPurpose {
+  LOGIN
+}
+
+enum NotificationStatus {
+  SCHEDULED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+model User {
+  id                    String          @id @default(cuid())
+  name                  String          @db.VarChar(120)
+  phone                 String          @unique @db.VarChar(16)
+  city                  String          @db.VarChar(100)
+  ageGroup              String          @db.VarChar(32)
+  consentStatus         ConsentStatus   @default(GRANTED)
+  consentVersion        String          @db.VarChar(32)
+  consentedAt           DateTime
+  notificationsConsent  Boolean         @default(false)
+  role                  UserRole        @default(PARTICIPANT)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  redemptions           CodeRedemption[]
+  pointLedger           PointLedger[]
+  rewardClaims          RewardClaim[]
+  consentRecords        ConsentRecord[]
+  sessions              Session[]
+  notifications         NotificationSchedule[]
+  auditEvents           AuditLog[]      @relation("AuditActor")
+
+  @@index([createdAt])
+}
+
+model Campaign {
+  id            String          @id @default(cuid())
+  name          String          @db.VarChar(120)
+  startAt       DateTime?
+  endAt         DateTime?
+  status        CampaignStatus @default(DRAFT)
+  configuration Json
+  isTest        Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  promoCodes    PromoCode[]
+  rewards       Reward[]
+
+  @@index([status])
+}
+
+model PromoCode {
+  id                  String          @id @default(cuid())
+  codeHash            String          @unique @db.VarChar(128)
+  status              PromoCodeStatus @default(ACTIVE)
+  campaignId          String
+  createdAt           DateTime        @default(now())
+  activatedAt         DateTime?
+  activatedByUserId   String?
+  campaign            Campaign        @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  redemption          CodeRedemption?
+
+  @@index([campaignId, status])
+  @@index([activatedByUserId])
+}
+
+model CodeRedemption {
+  id            String    @id @default(cuid())
+  userId        String
+  promoCodeId   String    @unique
+  pointsAwarded Int
+  redeemedAt    DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  promoCode     PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Restrict)
+
+  @@index([userId, redeemedAt])
+}
+
+model PointLedger {
+  id            String    @id @default(cuid())
+  userId        String
+  delta         Int
+  reason        String    @db.VarChar(80)
+  redemptionId  String?   @unique
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+}
+
+model Reward {
+  id             String       @id @default(cuid())
+  campaignId     String
+  nameKz         String       @db.VarChar(160)
+  nameRu         String       @db.VarChar(160)
+  descriptionKz  String       @db.Text
+  descriptionRu  String       @db.Text
+  pointsRequired Int
+  rewardType     RewardType
+  quantityLimit  Int?
+  isActive       Boolean      @default(false)
+  isConfirmed    Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  campaign       Campaign     @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  claims         RewardClaim[]
+
+  @@index([campaignId, isActive])
+}
+
+model RewardClaim {
+  id          String            @id @default(cuid())
+  userId      String
+  rewardId    String
+  status      RewardClaimStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  fulfilledAt DateTime?
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  reward      Reward            @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, rewardId])
+  @@index([rewardId, status])
+}
+
+model ConsentRecord {
+  id        String        @id @default(cuid())
+  userId    String
+  status    ConsentStatus
+  version   String        @db.VarChar(32)
+  purpose   String        @db.VarChar(240)
+  createdAt DateTime      @default(now())
+  user      User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model OtpChallenge {
+  id         String     @id @default(cuid())
+  phone      String     @db.VarChar(16)
+  codeHash   String     @db.VarChar(128)
+  purpose    OtpPurpose
+  expiresAt  DateTime
+  attempts   Int        @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([phone, purpose, expiresAt])
+}
+
+model RequestThrottle {
+  id          String   @id @default(cuid())
+  keyHash     String   @unique @db.VarChar(128)
+  windowStart DateTime
+  hits        Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String?
+  action      String   @db.VarChar(120)
+  entityType  String   @db.VarChar(80)
+  entityId    String?  @db.VarChar(120)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model NotificationSchedule {
+  id              String             @id @default(cuid())
+  userId          String
+  event           String             @db.VarChar(80)
+  channel         String             @db.VarChar(32)
+  locale          String             @db.VarChar(8)
+  templateKey     String             @db.VarChar(80)
+  scheduledFor    DateTime
+  status          NotificationStatus @default(SCHEDULED)
+  providerMessage String?            @db.VarChar(160)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  logs            NotificationLog[]
+
+  @@index([status, scheduledFor])
+}
+
+model NotificationLog {
+  id             String               @id @default(cuid())
+  scheduleId     String
+  status         NotificationStatus
+  providerRef    String?              @db.VarChar(160)
+  errorCode      String?              @db.VarChar(80)
+  createdAt      DateTime             @default(now())
+  schedule       NotificationSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId, createdAt])
+}
